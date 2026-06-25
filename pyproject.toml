@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xq-auth-client"
+version = "0.1.0"
+description = "The one shared XQ auth contract: the frozen capability token + PEP, the RS256/JWKS user-JWT validator, and the CAEP/SSF revocation feed. Imported by every cell-side service so the contract can never drift."
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+    "pyjwt[crypto]>=2.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["xq_auth_client"]
+
+[tool.ruff]
+line-length = 120
