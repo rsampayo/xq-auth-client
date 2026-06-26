@@ -57,6 +57,7 @@ class JwksValidator:
         jwks_url: str | None = None,
         revocation: RevocationFeed | None = None,
         leeway: int = 30,
+        legacy_hs256_secret: str | None = None,
     ) -> None:
         if not jwks and not jwks_url:
             raise ValueError("JwksValidator needs either a static `jwks` set or a `jwks_url`")
@@ -64,6 +65,11 @@ class JwksValidator:
         self.audience = audience
         self.revocation = revocation
         self.leeway = leeway
+        # TRANSITION ONLY: during the HS256→RS256 cutover the Brain still mints HS256 while serving
+        # JWKS. Pass the shared secret here so this validator accepts BOTH (HS256-via-secret now,
+        # RS256-via-JWKS after the Brain flips its mint). Drop it once the Brain mints RS256 — then this
+        # is pure JWKS, no shared secret. Mirrors the Brain's own dual-mode decode (COSA-RESPONSE C2).
+        self._hs_secret = legacy_hs256_secret
         # static mode: index the signing keys by kid up front.
         self._static_keys: dict[str, object] = {}
         if jwks:
@@ -91,12 +97,21 @@ class JwksValidator:
 
     def validate(self, raw_jwt: str) -> dict:
         """Return the verified claims, or raise InvalidUserToken. Resource servers: catch → 401."""
-        key = self._resolve_key(raw_jwt)
+        try:
+            alg = jwt.get_unverified_header(raw_jwt).get("alg")
+        except jwt.PyJWTError as e:
+            raise InvalidUserToken(UserTokenDeny.MALFORMED, type(e).__name__) from e
+        if alg == "HS256" and self._hs_secret:
+            key: object = self._hs_secret   # transition: legacy shared-secret token
+            algs = ["HS256"]
+        else:
+            key = self._resolve_key(raw_jwt)  # the end state: RS256 via JWKS
+            algs = ["RS256"]
         try:
             claims = jwt.decode(
                 raw_jwt,
                 key,
-                algorithms=["RS256"],
+                algorithms=algs,
                 audience=self.audience,
                 issuer=self.issuer,
                 leeway=self.leeway,

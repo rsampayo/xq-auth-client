@@ -1,6 +1,7 @@
 """JwksValidator — the RS256/JWKS user-JWT leg + the G4 principal-revocation check."""
 import time
 
+import jwt
 import pytest
 
 from xq_auth_client import InMemoryRevocationFeed, InvalidUserToken, JwksValidator, UserTokenDeny
@@ -56,3 +57,20 @@ def test_g4_principal_revocation_on_user_leg(sign, user_claims, keys):
 def test_requires_a_key_source():
     with pytest.raises(ValueError):
         JwksValidator(issuer=ISS, audience=AUD)
+
+
+def test_dual_mode_accepts_legacy_hs256_during_cutover(sign, user_claims, keys):
+    # transition state: Brain still mints HS256 while serving JWKS → the validator must accept BOTH.
+    secret = "shared-cutover-secret"
+    v = JwksValidator(issuer=ISS, audience=AUD, jwks=keys["jwks"], legacy_hs256_secret=secret)
+    hs = jwt.encode({**user_claims}, secret, algorithm="HS256")
+    assert v.validate(hs)["sub"] == user_claims["sub"]   # legacy HS256 accepted...
+    assert v.validate(sign(user_claims))["sub"] == user_claims["sub"]  # ...and RS256 via JWKS too
+
+
+def test_hs256_rejected_when_no_legacy_secret(user_claims, keys):
+    # the end state: no shared secret → an HS256 token can't resolve a kid → rejected
+    v = JwksValidator(issuer=ISS, audience=AUD, jwks=keys["jwks"])
+    hs = jwt.encode({**user_claims}, "whatever", algorithm="HS256")
+    with pytest.raises(InvalidUserToken):
+        v.validate(hs)
