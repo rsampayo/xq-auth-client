@@ -1,0 +1,47 @@
+# XQ fleet CI — LIBRARY template (no deploy: xq-auth-client is consumed via sibling-mount,
+# not deployed to an LXC). Quality gates only. Mirrors the service template's `test`+`gitleaks`.
+name: ci
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: ruff
+        run: ruff check xq_auth_client/ tests/
+      - name: pytest
+        run: python -m pytest
+      - name: pip-audit
+        run: |
+          pip install pip-audit
+          pip-audit --skip-editable
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: install gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+      - name: gitleaks detect
+        run: gitleaks detect --source . --redact --verbose
