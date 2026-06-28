@@ -13,6 +13,14 @@ from xq_auth_client.pep import (
     PepEnvelope,
     verify_capability,
 )
+from xq_auth_client.receipts import (
+    POSITIVE_CONFIRMATION_CODES,
+    Confirmed,
+    Unconfirmed,
+    build_receipt,
+    sign_receipt,
+    verify_brain_receipt,
+)
 from xq_auth_client.revocation import (
     CAEP_SESSION_REVOKED,
     XQ_TOKEN_REVOKED_SUFFIX,
@@ -37,6 +45,12 @@ __all__ = [
     "JwksValidator",
     "InvalidUserToken",
     "UserTokenDeny",
+    "POSITIVE_CONFIRMATION_CODES",
+    "build_receipt",
+    "sign_receipt",
+    "verify_brain_receipt",
+    "Confirmed",
+    "Unconfirmed",
 ]
 
 __version__ = "0.1.0"
